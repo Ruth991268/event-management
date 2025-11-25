@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"fmt"
 
 	"event-management/backend/middlewares"
 )
@@ -152,6 +153,7 @@ func GetEvent(db *sql.DB) http.Handler {
 // ---------------------------
 // Update Event
 // ---------------------------
+// handlers/events.go → Replace the entire UpdateEvent function with this:
 func UpdateEvent(db *sql.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -168,13 +170,13 @@ func UpdateEvent(db *sql.DB) http.Handler {
 		}
 
 		var input struct {
-			Title       string  `json:"title"`
-			Description string  `json:"description"`
-			Location    string  `json:"location"`
-			Category    string  `json:"category"`
-			StartDate   string  `json:"start_date"`
-			EndDate     string  `json:"end_date"`
-			Price       float64 `json:"price"`
+			Title       *string  `json:"title"`
+			Description *string  `json:"description"`
+			Location    *string  `json:"location"`
+			Category    *string  `json:"category"`
+			StartDate   *string  `json:"start_date"`
+			EndDate     *string  `json:"end_date"`
+			Price       *float64 `json:"price"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -182,31 +184,80 @@ func UpdateEvent(db *sql.DB) http.Handler {
 			return
 		}
 
-		start, err := time.Parse(time.RFC3339, input.StartDate)
-		if err != nil {
-			http.Error(w, "Invalid start_date format", http.StatusBadRequest)
-			return
+		// Build dynamic query
+		query := "UPDATE events SET updated_at = NOW()"
+		var args []interface{}
+		argID := 1
+
+		if input.Title != nil {
+			query += fmt.Sprintf(", title = $%d", argID)
+			args = append(args, *input.Title)
+			argID++
 		}
-		end, err := time.Parse(time.RFC3339, input.EndDate)
-		if err != nil {
-			http.Error(w, "Invalid end_date format", http.StatusBadRequest)
+		if input.Description != nil {
+			query += fmt.Sprintf(", description = $%d", argID)
+			args = append(args, *input.Description)
+			argID++
+		}
+		if input.Location != nil {
+			query += fmt.Sprintf(", location = $%d", argID)
+			args = append(args, *input.Location)
+			argID++
+		}
+		if input.Category != nil {
+			query += fmt.Sprintf(", category = $%d", argID)
+			args = append(args, *input.Category)
+			argID++
+		}
+		if input.Price != nil {
+			query += fmt.Sprintf(", price = $%d", argID)
+			args = append(args, *input.Price)
+			argID++
+		}
+		if input.StartDate != nil {
+			start, err := time.Parse(time.RFC3339, *input.StartDate)
+			if err != nil {
+				http.Error(w, "Invalid start_date format. Use RFC3339", http.StatusBadRequest)
+				return
+			}
+			query += fmt.Sprintf(", start_date = $%d", argID)
+			args = append(args, start)
+			argID++
+		}
+		if input.EndDate != nil {
+			end, err := time.Parse(time.RFC3339, *input.EndDate)
+			if err != nil {
+				http.Error(w, "Invalid end_date format. Use RFC3339", http.StatusBadRequest)
+				return
+			}
+			query += fmt.Sprintf(", end_date = $%d", argID)
+			args = append(args, end)
+			argID++
+		}
+
+		if argID == 1 {
+			http.Error(w, "No fields to update", http.StatusBadRequest)
 			return
 		}
 
-		_, err = db.Exec(`
-			UPDATE events SET title=$1, description=$2, location=$3, category=$4, start_date=$5, end_date=$6, price=$7
-			WHERE id=$8 AND created_by=$9
-		`, input.Title, input.Description, input.Location, input.Category, start, end, input.Price, eventID, userID)
+		query += fmt.Sprintf(" WHERE id = $%d AND created_by = $%d", argID, argID+1)
+		args = append(args, eventID, userID)
 
+		result, err := db.Exec(query, args...)
 		if err != nil {
-			http.Error(w, "Update failed", http.StatusInternalServerError)
+			http.Error(w, "Update failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			http.Error(w, "Event not found or not owned by you", http.StatusNotFound)
 			return
 		}
 
 		json.NewEncoder(w).Encode(map[string]string{"message": "Event updated successfully"})
 	})
 }
-
 // ---------------------------
 // Delete Event
 // ---------------------------

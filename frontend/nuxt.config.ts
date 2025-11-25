@@ -1,26 +1,38 @@
+// nuxt.config.ts
+/// <reference types="@pinia/nuxt" />
+
+import { defineNuxtConfig } from 'nuxt/config'
 
 export default defineNuxtConfig({
+  compatibilityDate: '2025-11-25',
   devtools: { enabled: true },
-  css: ['~/assets/css/tailwind.css','~/assets/leaflet.css'],
-  postcss: { plugins: { tailwindcss: {}, autoprefixer: {} } },
-  modules: ['@nuxt/content',
-     '@vee-validate/nuxt'
-  ],
-  plugins: ['~/plugins/api.ts'],
-    runtimeConfig: {
-    public: {
-      apiBase: '/api' // proxy to Go backend
+
+  css: ['~/assets/css/tailwind.css'],
+
+  postcss: {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {}
     }
-  }, 
+  },
+
+  modules: ['@pinia/nuxt'],
+
+  runtimeConfig: {
+    public: {
+      apiBase: '/api'
+    }
+  },
+
   vite: {
     server: {
       proxy: {
         '/api': {
           target: 'http://localhost:8080',
           changeOrigin: true,
-          rewrite: (p) => p.replace(/^\/api/, '')
+          rewrite: (path: string) => path.replace(/^\/api/, '')
         }
       }
     }
-  },
+  }
 })

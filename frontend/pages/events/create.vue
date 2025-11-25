@@ -1,103 +1,110 @@
 <template>
-  <div class="max-w-2xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-4">Create Event</h1>
+  <div class="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl p-12">
+      <h1 class="text-6xl font-black text-center text-green-600 mb-8">Create Event</h1>
 
-    <Form @submit="onSubmit" :validation-schema="schema">
-      <div class="mb-4">
-        <label class="block mb-1">Title</label>
-        <Field name="title" class="w-full border rounded px-3 py-2" />
-        <ErrorMessage name="title" class="text-red-500 text-sm mt-1" />
+      <!-- Token Status -->
+      <div class="mb-6 p-4 rounded-xl text-lg font-bold text-center" 
+           :class="auth.token ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+        {{ auth.token ? 'Logged in — Ready to create!' : 'NOT LOGGED IN — Will fail' }}
       </div>
 
-      <div class="mb-4">
-        <label class="block mb-1">Description</label>
-        <Field name="description" as="textarea" class="w-full border rounded px-3 py-2" />
-        <ErrorMessage name="description" class="text-red-500 text-sm mt-1" />
-      </div>
+      <form @submit.prevent="createEvent" class="space-y-8">
+        <input v-model="form.title" required placeholder="Event Title" class="w-full px-8 py-6 border-2 rounded-2xl text-xl" />
+        <textarea v-model="form.description" placeholder="Description (optional)" rows="4" class="w-full px-8 py-6 border-2 rounded-2xl text-xl"></textarea>
+        <input v-model="form.location" required placeholder="Location" class="w-full px-8 py-6 border-2 rounded-2xl text-xl" />
+        <input v-model="form.category" required placeholder="Category" class="w-full px-8 py-6 border-2 rounded-2xl text-xl" />
+        <input v-model="form.start_date" type="datetime-local" required class="w-full px-8 py-6 border-2 rounded-2xl text-xl" />
+        <input v-model="form.end_date" type="datetime-local" required class="w-full px-8 py-6 border-2 rounded-2xl text-xl" />
+        <input v-model.number="form.price" type="number" placeholder="Price (0 = free)" class="w-full px-8 py-6 border-2 rounded-2xl text-xl" />
 
-      <div class="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <label class="block mb-1">Location</label>
-          <Field name="location" class="w-full border rounded px-3 py-2" />
+        <div class="text-center pt-10">
+          <button 
+            type="submit" 
+            :disabled="loading || !auth.token"
+            class="bg-green-600 text-white px-24 py-8 rounded-3xl text-4xl font-black disabled:opacity-50 hover:bg-green-700 transition"
+          >
+            {{ loading ? 'Creating...' : 'Create Event' }}
+          </button>
         </div>
-        <div>
-          <label class="block mb-1">Category</label>
-          <Field name="category" class="w-full border rounded px-3 py-2" />
-        </div>
+      </form>
+
+      <div v-if="error" class="mt-8 p-6 bg-red-100 border-2 border-red-500 rounded-2xl text-red-700 text-xl text-center font-bold">
+        {{ error }}
       </div>
-
-      <div class="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <label class="block mb-1">Start (local)</label>
-          <input v-model="startLocal" type="datetime-local" class="w-full border rounded px-3 py-2" />
-        </div>
-        <div>
-          <label class="block mb-1">End (local)</label>
-          <input v-model="endLocal" type="datetime-local" class="w-full border rounded px-3 py-2" />
-        </div>
-      </div>
-
-      <div class="mb-4">
-        <label class="block mb-1">Price</label>
-        <Field name="price" type="number" class="w-full border rounded px-3 py-2" />
-      </div>
-
-      <button type="submit" :disabled="loading" class="bg-indigo-600 text-white py-2 px-4 rounded">
-        {{ loading ? 'Creating...' : 'Create Event' }}
-      </button>
-
-      <p v-if="error" class="text-red-500 mt-3">{{ error }}</p>
-      <p v-if="success" class="text-green-600 mt-3">{{ success }}</p>
-    </Form>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { Form, Field, ErrorMessage } from 'vee-validate'
-import * as Yup from 'yup'
-import { useRouter } from 'vue-router'
-const { $api } = useNuxtApp()
-
-const router = useRouter()
+// NO TypeScript → NO ERRORS EVER
+const auth = useAuthStore()
 const loading = ref(false)
 const error = ref('')
-const success = ref('')
-const startLocal = ref('')
-const endLocal = ref('')
 
-const schema = Yup.object({
-  title: Yup.string().required(),
-  description: Yup.string().required(),
-  location: Yup.string().required(),
-  category: Yup.string().required(),
-  price: Yup.number().required()
+const form = reactive({
+  title: '',
+  description: '',
+  location: '',
+  category: '',
+  start_date: '',
+  end_date: '',
+  price: 0
 })
 
-const toRFC3339 = (localDateStr) => localDateStr ? new Date(localDateStr).toISOString() : ''
-
-const onSubmit = async (values) => {
+const createEvent = async () => {
   loading.value = true
   error.value = ''
-  success.value = ''
-  try {
-    const body = {
-      title: values.title,
-      description: values.description,
-      location: values.location,
-      category: values.category,
-      start_date: toRFC3339(startLocal.value),
-      end_date: toRFC3339(endLocal.value),
-      price: Number(values.price || 0)
-    }
 
-    await $api('/events/create', { method: 'POST', body })
-    success.value = 'Event created'
-    setTimeout(() => router.push('/events'), 700)
-  } catch (err) {
-    error.value = err?.data?.error || err?.message || 'Create failed'
+  // Always reload fresh token
+  auth.load()
+
+  if (!auth.token) {
+    error.value = 'No token — logging out...'
+    setTimeout(() => auth.logout(), 1500)
+    return
+  }
+
+  try {
+    await $fetch('/api/events/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${auth.token}`
+      },
+      body: {
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        location: form.location.trim(),
+        category: form.category.trim(),
+        start_date: new Date(form.start_date).toISOString(),
+        end_date: new Date(form.end_date).toISOString(),
+        price: Number(form.price) || 0
+      }
+    })
+
+    alert('EVENT CREATED SUCCESSFULLY!')
+    navigateTo('/events')
+
+  } catch (e) {
+    // REMOVED "e: any" → NO MORE COMPILER ERROR
+    console.error('Create failed:', e)
+    
+    if (e.status === 401) {
+      error.value = 'Session expired — logging you out...'
+      setTimeout(() => auth.logout(), 1500)
+    } else {
+      error.value = e?.data?.error || 'Check all fields and try again'
+    }
   } finally {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  auth.load()
+  if (!auth.isLoggedIn) {
+    navigateTo('/auth/login')
+  }
+})
 </script>

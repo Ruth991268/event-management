@@ -1,12 +1,10 @@
 <template>
-  <div>
-    <Header />
-    <main class="min-h-[calc(100vh-64px)]">
-      <NuxtPage />
+  <div class="min-h-screen bg-gray-100">
+    <header class="bg-white shadow p-4 text-center text-2xl font-bold">
+      Eventify App
+    </header>
+    <main class="p-8">
+      <slot />
     </main>
   </div>
 </template>
-
-<script setup>
-import Header from '~/components/Header.vue'
-</script>
