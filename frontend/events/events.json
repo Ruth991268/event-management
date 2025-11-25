@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "title": "Music Fiesta",
+    "description": "An amazing music event.",
+    "featuredImage": "/images/music-fiesta.jpg",
+    "venue": "City Hall",
+    "date": "2025-12-01T18:00:00",
+    "price": 25,
+    "category": "Music"
+  },
+  {
+    "id": 2,
+    "title": "Tech Conference 2025",
+    "description": "Explore the latest in tech.",
+    "featuredImage": "/images/tech-conference.jpg",
+    "venue": "Tech Hub",
+    "date": "2025-12-10T09:00:00",
+    "price": 100,
+    "category": "Tech"
+  },
+  {
+    "id": 3,
+    "title": "Food Festival",
+    "description": "Taste cuisines from around the world.",
+    "featuredImage": "/images/food-festival.jpg",
+    "venue": "Central Park",
+    "date": "2025-12-05T12:00:00",
+    "price": 0,
+    "category": "Food"
+  }
+]
