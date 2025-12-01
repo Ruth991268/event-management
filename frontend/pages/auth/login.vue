@@ -1,35 +1,51 @@
 <template>
-  <div class="max-w-md mx-auto bg-white p-10 rounded shadow mt-20">
-    <h1 class="text-3xl font-bold text-center mb-8">Login</h1>
-    <form @submit.prevent="login">
-      <input v-model="email" type="email" placeholder="Email" required class="w-full p-3 border mb-4 rounded" />
-      <input v-model="password" type="password" placeholder="Password" required class="w-full p-3 border mb-6 rounded" />
-      <button type="submit" class="w-full bg-blue-600 text-white p-4 rounded text-xl">
-        Login
+  <div class="max-w-md mx-auto mt-32 bg-white p-10 rounded-2xl shadow-2xl">
+    <h1 class="text-4xl font-bold text-center mb-8">Login</h1>
+    
+    <form @submit.prevent="login" class="space-y-6">
+      <input v-model="email" type="email" required placeholder="Email" class="w-full px-5 py-4 border rounded-xl text-lg" />
+      <input v-model="password" type="password" required placeholder="Password" class="w-full px-5 py-4 border rounded-xl text-lg" />
+      
+      <button type="submit" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white font-bold py-4 rounded-xl text-xl transition">
+        {{ loading ? 'Logging in...' : 'Login' }}
       </button>
     </form>
-    <p class="text-center mt-4">
-      No account? <NuxtLink to="/auth/signup" class="text-green-600 underline">Sign up</NuxtLink>
+
+    <p class="text-center mt-6 text-gray-600">
+      No account? <NuxtLink to="/auth/signup" class="text-blue-600 font-bold underline">Sign up</NuxtLink>
     </p>
   </div>
 </template>
 
-<script setup>
-const email = ref('ruth@gmail.com')
-const password = ref('123456')
+<script setup lang="ts">
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const loading = ref(false)
+
+const email = ref('')
+const password = ref('')
 
 const login = async () => {
+  loading.value = true
   try {
-    const res = await $fetch('http://localhost:8080/login', {
+    const res = await $fetch('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: { email: email.value, password: password.value }
     })
+
     auth.set(res.token, res.user)
-    navigateTo('/events')
-  } catch (e) {
-    alert('Wrong email or password')
+
+    // Fixed line: proper type guard
+    const redirectTo = typeof route.query.redirect === 'string' 
+      ? route.query.redirect 
+      : '/events'
+
+    router.push(redirectTo)
+  } catch (err: any) {
+    alert(err?.data?.error || 'Login failed')
+  } finally {
+    loading.value = false
   }
 }
 </script>

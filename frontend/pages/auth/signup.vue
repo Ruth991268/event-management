@@ -1,3 +1,4 @@
+<!-- frontend/pages/auth/signup.vue -->
 <template>
   <div class="max-w-md mx-auto bg-white p-10 rounded shadow mt-20">
     <h1 class="text-3xl font-bold text-center mb-8">Sign Up</h1>
@@ -16,6 +17,9 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import { useAuthStore } from '@/stores/auth' // Ensure this path is correct
+
 const name = ref('')
 const email = ref('')
 const password = ref('')
@@ -23,16 +27,25 @@ const auth = useAuthStore()
 
 const signup = async () => {
   try {
-    const res = await $fetch('http://localhost:8080/signup', {
+    const res = await $fetch('/api/signup', { // Use /api/signup for proxy
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: { name: name.value, email: email.value, password: password.value }
     })
     auth.set(res.token, res.user)
-    alert('Account created!')
+    alert('Account created successfully!')
     navigateTo('/events')
   } catch (e) {
-    alert('Email already exists')
+    console.error('Signup error:', e); // Log the full error
+
+    // Improved error message extraction
+    let errorMessage = 'Signup failed. Please try again.';
+    if (e.response && e.response._data && e.response._data.error) {
+        errorMessage = `Signup failed: ${e.response._data.error}`;
+    } else if (e.message) {
+        errorMessage = `Signup failed: ${e.message}`;
+    }
+    alert(errorMessage);
   }
 }
 </script>

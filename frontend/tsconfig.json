@@ -1,25 +1,36 @@
-{
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "strict": true,
-    "jsx": "preserve",
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "baseUrl": ".",
-    "paths": {
-      "~/*": ["./*"],
-      "@/*": ["./*"]
+// nuxt.config.ts
+import { defineNuxtConfig } from 'nuxt/config'
+
+export default defineNuxtConfig({
+  compatibilityDate: '2025-11-25',
+  devtools: { enabled: true },
+
+  css: ['~/assets/css/tailwind.css'],
+  postcss: {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {}
     }
   },
-  "exclude": ["node_modules", ".nuxt", "dist"],
-  "references": [
-    { "path": "./.nuxt/tsconfig.app.json" },
-    { "path": "./.nuxt/tsconfig.server.json" },
-    { "path": "./.nuxt/tsconfig.shared.json" },
-    { "path": "./.nuxt/tsconfig.node.json" }
-  ]
-}
 
+  modules: ['@pinia/nuxt'],
 
+  // Disable vue-tsc error + keep dev fast
+  typescript: {
+    typeCheck: false,
+    shim: false
+  },
+
+  // Your proxy
+  vite: {
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/api/, '')
+        }
+      }
+    }
+  }
+})

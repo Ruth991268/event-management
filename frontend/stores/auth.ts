@@ -1,39 +1,50 @@
-// stores/auth.ts
+// frontend/stores/auth.ts
 import { defineStore } from 'pinia'
 
 export const useAuthStore = defineStore('auth', {
-  state: () => {
-    // Auto-load from localStorage when app starts
-    if (typeof window === 'undefined') {
-      return { token: null, user: null }
-    }
-    try {
-      const saved = localStorage.getItem('auth')
-      if (saved) {
-        const data = JSON.parse(saved)
-        return { token: data.token || null, user: data.user || null }
-      }
-    } catch (e) {
-      console.error('Failed to read auth from localStorage', e)
-    }
-    return { token: null, user: null }
-  },
-
-  getters: {
-    isLoggedIn: (state): boolean => !!state.token && !!state.user
-  },
+  state: () => ({
+    token: null as string | null,
+    user: null as any,
+    isAuthenticated: false,
+  }),
 
   actions: {
     set(token: string, user: any) {
       this.token = token
       this.user = user
-      localStorage.setItem('auth', JSON.stringify({ token, user }))
+      this.isAuthenticated = true
+
+      if (process.client) {
+        localStorage.setItem('authToken', token)
+        localStorage.setItem('authUser', JSON.stringify(user))
+      }
     },
-    logout() {
+
+    clear() {
       this.token = null
       this.user = null
-      localStorage.removeItem('auth')
-      window.location.href = '/auth/login'
+      this.isAuthenticated = false
+      if (process.client) {
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('authUser')
+      }
+    },
+
+    initialize() {
+      if (process.client) {
+        const token = localStorage.getItem('authToken')
+        const user = localStorage.getItem('authUser')
+
+        if (token && user) {
+          this.token = token
+          this.user = JSON.parse(user)
+          this.isAuthenticated = true
+        }
+      }
     }
+  },
+
+  getters: {
+    isLoggedIn: (state) => state.isAuthenticated,
   }
 })

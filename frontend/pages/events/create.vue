@@ -1,42 +1,57 @@
 <template>
-  <div class="min-h-screen bg-gray-100 p-10">
-    <div class="max-w-2xl mx-auto bg-white p-10 rounded shadow">
-      <h1 class="text-3xl font-bold text-center mb-8">Create Event</h1>
-      <form @submit.prevent="create">
-        <input v-model="title" placeholder="Title" required class="w-full p-3 border mb-4 rounded" />
-        <textarea v-model="description" placeholder="Description" class="w-full p-3 border mb-4 rounded" rows="4"></textarea>
-        <input v-model="location" placeholder="Location" required class="w-full p-3 border mb-4 rounded" />
-        <button type="submit" class="w-full bg-green-600 text-white p-4 rounded text-xl">
-          Create Event
-        </button>
-      </form>
-      <div class="text-center mt-6">
-        <NuxtLink to="/events" class="text-blue-600 underline">Back</NuxtLink>
-      </div>
-    </div>
+  <div class="max-w-2xl mx-auto bg-white p-10 rounded-xl shadow-xl mt-10">
+    <h1 class="text-4xl font-bold text-center mb-8">Create New Event</h1>
+
+    <form @submit.prevent="createEvent" class="space-y-6">
+      <input v-model="event.title" required placeholder="Title" class="w-full px-4 py-3 border rounded-lg" />
+      <textarea v-model="event.description" placeholder="Description" rows="4" class="w-full px-4 py-3 border rounded-lg"></textarea>
+      <input v-model="event.category" placeholder="Category" class="w-full px-4 py-3 border rounded-lg" />
+      <input v-model="event.location" required placeholder="Location" class="w-full px-4 py-3 border rounded-lg" />
+      <input v-model="event.start_date" required type="datetime-local" class="w-full px-4 py-3 border rounded-lg" />
+      <input v-model="event.end_date" required type="datetime-local" class="w-full px-4 py-3 border rounded-lg" />
+      <input v-model.number="event.price" type="number" step="0.01" placeholder="Price" class="w-full px-4 py-3 border rounded-lg" />
+
+      <button type="submit" :disabled="loading" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-lg">
+        {{ loading ? 'Creating...' : 'Create Event' }}
+      </button>
+    </form>
   </div>
 </template>
 
 <script setup>
-const title = ref('')
-const description = ref('')
-const location = ref('')
 const auth = useAuthStore()
+const loading = ref(false)
 
-const create = async () => {
+const event = ref({
+  title: '', description: '', category: '', location: '',
+  start_date: '', end_date: '', price: 0
+})
+
+onMounted(() => {
+  auth.initialize()
+  if (!auth.isLoggedIn) {
+    navigateTo(`/auth/login?redirect=${encodeURIComponent('/events/create')}`)
+  }
+})
+
+const createEvent = async () => {
+  loading.value = true
   try {
-    await $fetch('http://localhost:8080/events/create', {
+    await $fetch('/api/events/create', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${auth.token}`,
-        'Content-Type': 'application/json'
-      },
-      body: { title: title.value, description: description.value, location: location.value }
+      headers: { Authorization: `Bearer ${auth.token}` },
+      body: {
+        ...event.value,
+        start_date: new Date(event.value.start_date).toISOString(),
+        end_date: new Date(event.value.end_date).toISOString(),
+      }
     })
     alert('Event created!')
     navigateTo('/events')
-  } catch (e) {
-    alert('Failed')
+  } catch (err) {
+    alert('Failed to create event')
+  } finally {
+    loading.value = false
   }
 }
 </script>
