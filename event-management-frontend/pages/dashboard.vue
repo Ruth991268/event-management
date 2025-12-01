@@ -152,7 +152,7 @@
               <div v-if="loading.bookmarks" class="text-center py-8">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               </div>
-              <div v-else-if="bookmarkedEvents.length === 0" class="text-center py-8">
+              <div v-else-if="!bookmarkedEvents || bookmarkedEvents.length === 0" class="text-center py-8">
                 <svg class="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
@@ -165,7 +165,7 @@
                   <div>
                     <h4 class="font-medium text-gray-800">{{ event.title }}</h4>
                     <p class="text-sm text-gray-600 mt-1">
-                      {{ new Date(event.start_date).toLocaleDateString() }} • {{ event.location }}
+                      {{ formatDate(event.start_date) }} • {{ event.location }}
                     </p>
                   </div>
                   <div class="flex space-x-2">
@@ -203,7 +203,7 @@
               <div v-if="loading.followed" class="text-center py-8">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               </div>
-              <div v-else-if="followedEvents.length === 0" class="text-center py-8">
+              <div v-else-if="!followedEvents || followedEvents.length === 0" class="text-center py-8">
                 <svg class="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-4.201V21m-4.75-11.75h4.5m-4.5 0v4.5m0-4.5l4.5 4.5" />
                 </svg>
@@ -221,7 +221,7 @@
                       </span>
                     </div>
                     <p class="text-sm text-gray-600 mt-1">
-                      {{ new Date(event.start_date).toLocaleDateString() }} • {{ event.category }}
+                      {{ formatDate(event.start_date) }} • {{ event.category }}
                     </p>
                   </div>
                   <div class="flex space-x-2">
@@ -250,8 +250,11 @@
           <div v-if="loading.events" class="text-center py-8">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           </div>
-          <div v-else-if="recentEvents.length === 0" class="text-center py-8">
+          <div v-else-if="!recentEvents || recentEvents.length === 0" class="text-center py-8">
             <p class="text-gray-500">No events available</p>
+            <button @click="fetchEvents" class="mt-2 text-blue-600 hover:text-blue-800">
+              Refresh
+            </button>
           </div>
           <div v-else class="overflow-x-auto">
             <table class="w-full">
@@ -269,11 +272,11 @@
                   <td class="py-4">
                     <div>
                       <p class="font-medium text-gray-800">{{ event.title }}</p>
-                      <p class="text-sm text-gray-600">{{ event.description?.substring(0, 50) }}...</p>
+                      <p class="text-sm text-gray-600">{{ truncateDescription(event.description) }}</p>
                     </div>
                   </td>
                   <td class="py-4">
-                    {{ new Date(event.start_date).toLocaleDateString() }}
+                    {{ formatDate(event.start_date) }}
                   </td>
                   <td class="py-4">
                     {{ event.location }}
@@ -342,6 +345,11 @@ definePageMeta({
   middleware: 'auth'
 });
 
+// Import useApi composable
+import { useApi } from '~/composables/useApi';
+
+const { get, post, getCurrentUser } = useApi();
+
 const user = ref<any>(null);
 const loading = reactive({
   events: true,
@@ -366,6 +374,22 @@ const toast = reactive({
   type: 'success'
 });
 
+// Helper functions
+const formatDate = (dateString: string) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const truncateDescription = (description: string) => {
+  if (!description) return '';
+  return description.length > 50 ? description.substring(0, 50) + '...' : description;
+};
+
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   toast.message = message;
   toast.type = type;
@@ -378,18 +402,17 @@ const showToast = (message: string, type: 'success' | 'error' = 'success') => {
 // Load user data
 onMounted(async () => {
   if (process.client) {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      try {
-        user.value = JSON.parse(userData);
-        await Promise.all([
-          fetchEvents(),
-          fetchBookmarkedEvents(),
-          fetchFollowedEvents()
-        ]);
-      } catch (e) {
-        console.error('Error loading user data:', e);
-      }
+    user.value = getCurrentUser();
+    
+    try {
+      await Promise.all([
+        fetchEvents(),
+        fetchBookmarkedEvents(),
+        fetchFollowedEvents()
+      ]);
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      showToast('Failed to load dashboard data', 'error');
     }
   }
 });
@@ -398,15 +421,24 @@ onMounted(async () => {
 const fetchEvents = async () => {
   try {
     loading.events = true;
-    const token = localStorage.getItem('jwt_token');
-    const response = await $fetch('http://localhost:8080/events', {
-      headers: {
-        'Authorization': `Bearer ${token}`
+    
+    // Get all events (from all users)
+    const response = await get('http://localhost:8080/events');
+    
+    // Ensure response is an array
+    if (Array.isArray(response)) {
+      recentEvents.value = response;
+      stats.totalEvents = recentEvents.value.length;
+      
+      // Count events created by current user
+      if (user.value?.id) {
+        stats.myEvents = recentEvents.value.filter(e => e.created_by === user.value.id).length;
       }
-    });
-    recentEvents.value = response as any[];
-    stats.totalEvents = recentEvents.value.length;
-    stats.myEvents = recentEvents.value.filter(e => e.created_by === user.value?.id).length;
+    } else {
+      console.error('Events API did not return an array:', response);
+      recentEvents.value = [];
+    }
+    
   } catch (error) {
     console.error('Error fetching events:', error);
     showToast('Failed to load events', 'error');
@@ -419,14 +451,17 @@ const fetchEvents = async () => {
 const fetchBookmarkedEvents = async () => {
   try {
     loading.bookmarks = true;
-    const token = localStorage.getItem('jwt_token');
-    const response = await $fetch('http://localhost:8080/events/bookmarked', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    bookmarkedEvents.value = response as any[];
-    stats.bookmarkedEvents = bookmarkedEvents.value.length;
+    const response = await get('http://localhost:8080/events/bookmarked');
+    
+    // Ensure response is an array
+    if (Array.isArray(response)) {
+      bookmarkedEvents.value = response;
+      stats.bookmarkedEvents = bookmarkedEvents.value.length;
+    } else {
+      console.error('Bookmarked API did not return an array:', response);
+      bookmarkedEvents.value = [];
+    }
+    
   } catch (error) {
     console.error('Error fetching bookmarked events:', error);
   } finally {
@@ -438,14 +473,17 @@ const fetchBookmarkedEvents = async () => {
 const fetchFollowedEvents = async () => {
   try {
     loading.followed = true;
-    const token = localStorage.getItem('jwt_token');
-    const response = await $fetch('http://localhost:8080/events/followed', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    followedEvents.value = response as any[];
-    stats.followedEvents = followedEvents.value.length;
+    const response = await get('http://localhost:8080/events/followed');
+    
+    // Ensure response is an array
+    if (Array.isArray(response)) {
+      followedEvents.value = response;
+      stats.followedEvents = followedEvents.value.length;
+    } else {
+      console.error('Followed API did not return an array:', response);
+      followedEvents.value = [];
+    }
+    
   } catch (error) {
     console.error('Error fetching followed events:', error);
   } finally {
@@ -453,14 +491,20 @@ const fetchFollowedEvents = async () => {
   }
 };
 
-// Check if event is bookmarked
+// Check if event is bookmarked - FIXED
 const isBookmarked = (eventId: number) => {
-  return bookmarkedEvents.value.some(e => e.id === eventId);
+  if (!Array.isArray(bookmarkedEvents.value)) {
+    return false;
+  }
+  return bookmarkedEvents.value.some((e: any) => e.id === eventId);
 };
 
-// Check if event is followed
+// Check if event is followed - FIXED
 const isFollowing = (eventId: number) => {
-  return followedEvents.value.some(e => e.id === eventId);
+  if (!Array.isArray(followedEvents.value)) {
+    return false;
+  }
+  return followedEvents.value.some((e: any) => e.id === eventId);
 };
 
 // Toggle bookmark
@@ -470,25 +514,25 @@ const toggleBookmark = async (eventId: number, event: any) => {
   
   try {
     if (isCurrentlyBookmarked) {
-      await $fetch(`http://localhost:8080/events/unbookmark?event_id=${eventId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      bookmarkedEvents.value = bookmarkedEvents.value.filter(e => e.id !== eventId);
+      await post(`http://localhost:8080/events/unbookmark?event_id=${eventId}`, {});
+      
+      // Remove from array
+      if (Array.isArray(bookmarkedEvents.value)) {
+        bookmarkedEvents.value = bookmarkedEvents.value.filter((e: any) => e.id !== eventId);
+      }
       showToast('Event removed from bookmarks');
     } else {
-      await $fetch(`http://localhost:8080/events/bookmark?event_id=${eventId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      bookmarkedEvents.value.unshift(event);
+      await post(`http://localhost:8080/events/bookmark?event_id=${eventId}`, {});
+      
+      // Add to array
+      if (Array.isArray(bookmarkedEvents.value)) {
+        bookmarkedEvents.value.unshift(event);
+      } else {
+        bookmarkedEvents.value = [event];
+      }
       showToast('Event bookmarked!');
     }
-    stats.bookmarkedEvents = bookmarkedEvents.value.length;
+    stats.bookmarkedEvents = Array.isArray(bookmarkedEvents.value) ? bookmarkedEvents.value.length : 0;
   } catch (error) {
     console.error('Error toggling bookmark:', error);
     showToast('Failed to update bookmark', 'error');
@@ -503,30 +547,29 @@ const unbookmarkEvent = async (eventId: number) => {
 
 // Toggle follow
 const toggleFollow = async (eventId: number, event: any) => {
-  const token = localStorage.getItem('jwt_token');
   const isCurrentlyFollowing = isFollowing(eventId);
   
   try {
     if (isCurrentlyFollowing) {
-      await $fetch(`http://localhost:8080/events/unfollow?event_id=${eventId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      followedEvents.value = followedEvents.value.filter(e => e.id !== eventId);
+      await post(`http://localhost:8080/events/unfollow?event_id=${eventId}`, {});
+      
+      // Remove from array
+      if (Array.isArray(followedEvents.value)) {
+        followedEvents.value = followedEvents.value.filter((e: any) => e.id !== eventId);
+      }
       showToast('Unfollowed event');
     } else {
-      await $fetch(`http://localhost:8080/events/follow?event_id=${eventId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      followedEvents.value.unshift(event);
+      await post(`http://localhost:8080/events/follow?event_id=${eventId}`, {});
+      
+      // Add to array
+      if (Array.isArray(followedEvents.value)) {
+        followedEvents.value.unshift(event);
+      } else {
+        followedEvents.value = [event];
+      }
       showToast('Now following event!');
     }
-    stats.followedEvents = followedEvents.value.length;
+    stats.followedEvents = Array.isArray(followedEvents.value) ? followedEvents.value.length : 0;
   } catch (error) {
     console.error('Error toggling follow:', error);
     showToast('Failed to update follow status', 'error');
@@ -548,16 +591,3 @@ const logout = () => {
   }
 };
 </script>
-
-<style scoped>
-/* Add any custom styles here */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>
