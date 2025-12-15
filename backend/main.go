@@ -112,7 +112,7 @@ func main() {
 
 	// --------------------
 	// Start server
-	// --------------------
+	// -----------------
 
 	log.Printf("Server running on port %s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, middlewares.CORS(mux)); err != nil {
